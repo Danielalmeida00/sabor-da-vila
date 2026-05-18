@@ -1,108 +1,188 @@
 import {
   collection,
-  query,
-  where,
-  getDocs,
-  getDoc,
-  doc,
   addDoc,
   updateDoc,
   deleteDoc,
-  onSnapshot,
+  doc,
+  getDocs,
+  getDoc,
+  query,
+  where,
+  orderBy,
+  serverTimestamp,
 } from 'firebase/firestore';
 import { db } from './firebase';
 
-export const menuService = {
-  // Get all menu items
-  async getAllItems() {
-    try {
-      const q = query(collection(db, 'menu_items'), where('isAvailable', '==', true));
-      const querySnapshot = await getDocs(q);
-      return querySnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-    } catch (error) {
-      throw new Error(error.message);
-    }
-  },
+/**
+ * Obtém todas as categorias de menu
+ */
+export const getCategories = async () => {
+  try {
+    const categoriesRef = collection(db, 'categories');
+    const q = query(categoriesRef, orderBy('order', 'asc'));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
+  } catch (error) {
+    console.error('Erro ao buscar categorias:', error);
+    throw error;
+  }
+};
 
-  // Get items by category
-  async getItemsByCategory(categoryId) {
-    try {
-      const q = query(
-        collection(db, 'menu_items'),
-        where('category', '==', categoryId),
-        where('isAvailable', '==', true)
-      );
-      const querySnapshot = await getDocs(q);
-      return querySnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-    } catch (error) {
-      throw new Error(error.message);
-    }
-  },
+/**
+ * Obtém uma categoria específica
+ */
+export const getCategory = async (categoryId) => {
+  try {
+    const docRef = doc(db, 'categories', categoryId);
+    const snapshot = await getDoc(docRef);
+    return { id: snapshot.id, ...snapshot.data() };
+  } catch (error) {
+    console.error('Erro ao buscar categoria:', error);
+    throw error;
+  }
+};
 
-  // Get single item
-  async getItem(itemId) {
-    try {
-      const docRef = doc(db, 'menu_items', itemId);
-      const docSnap = await getDoc(docRef);
-      return docSnap.exists() ? { id: docSnap.id, ...docSnap.data() } : null;
-    } catch (error) {
-      throw new Error(error.message);
-    }
-  },
-
-  // Get all categories
-  async getCategories() {
-    try {
-      const querySnapshot = await getDocs(collection(db, 'categories'));
-      return querySnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-    } catch (error) {
-      throw new Error(error.message);
-    }
-  },
-
-  // Subscribe to real-time menu updates
-  subscribeToMenuItems(callback) {
-    const q = query(collection(db, 'menu_items'), where('isAvailable', '==', true));
-    return onSnapshot(q, (querySnapshot) => {
-      const items = querySnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-      callback(items);
+/**
+ * Cria uma nova categoria
+ */
+export const createCategory = async (categoryData) => {
+  try {
+    const docRef = await addDoc(collection(db, 'categories'), {
+      ...categoryData,
+      createdAt: serverTimestamp(),
     });
-  },
+    return { id: docRef.id, ...categoryData };
+  } catch (error) {
+    console.error('Erro ao criar categoria:', error);
+    throw error;
+  }
+};
 
-  // Add new menu item (admin)
-  async addItem(itemData) {
-    try {
-      const docRef = await addDoc(collection(db, 'menu_items'), {
-        ...itemData,
-        createdAt: new Date().toISOString(),
-        rating: 0,
-        reviews: 0,
-      });
-      return docRef.id;
-    } catch (error) {
-      throw new Error(error.message);
-    }
-  },
+/**
+ * Atualiza uma categoria
+ */
+export const updateCategory = async (categoryId, categoryData) => {
+  try {
+    const docRef = doc(db, 'categories', categoryId);
+    await updateDoc(docRef, {
+      ...categoryData,
+      updatedAt: serverTimestamp(),
+    });
+    return { id: categoryId, ...categoryData };
+  } catch (error) {
+    console.error('Erro ao atualizar categoria:', error);
+    throw error;
+  }
+};
 
-  // Update menu item (admin)
-  async updateItem(itemId, itemData) {
-    try {
-      const itemRef = doc(db, 'menu_items', itemId);
-      await updateDoc(itemRef, {
-        ...itemData,
-        updatedAt: new Date().toISOString(),
-      });
-    } catch (error) {
-      throw new Error(error.message);
-    }
-  },
+/**
+ * Deleta uma categoria
+ */
+export const deleteCategory = async (categoryId) => {
+  try {
+    await deleteDoc(doc(db, 'categories', categoryId));
+  } catch (error) {
+    console.error('Erro ao deletar categoria:', error);
+    throw error;
+  }
+};
 
-  // Delete menu item (admin)
-  async deleteItem(itemId) {
-    try {
-      await deleteDoc(doc(db, 'menu_items', itemId));
-    } catch (error) {
-      throw new Error(error.message);
-    }
-  },
+/**
+ * Obtém todos os pratos
+ */
+export const getMenuItems = async () => {
+  try {
+    const itemsRef = collection(db, 'menu_items');
+    const snapshot = await getDocs(itemsRef);
+    return snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
+  } catch (error) {
+    console.error('Erro ao buscar pratos:', error);
+    throw error;
+  }
+};
+
+/**
+ * Obtém pratos de uma categoria específica
+ */
+export const getMenuItemsByCategory = async (categoryId) => {
+  try {
+    const itemsRef = collection(db, 'menu_items');
+    const q = query(itemsRef, where('categoryId', '==', categoryId));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
+  } catch (error) {
+    console.error('Erro ao buscar pratos por categoria:', error);
+    throw error;
+  }
+};
+
+/**
+ * Obtém um prato específico
+ */
+export const getMenuItem = async (itemId) => {
+  try {
+    const docRef = doc(db, 'menu_items', itemId);
+    const snapshot = await getDoc(docRef);
+    return { id: snapshot.id, ...snapshot.data() };
+  } catch (error) {
+    console.error('Erro ao buscar prato:', error);
+    throw error;
+  }
+};
+
+/**
+ * Cria um novo prato
+ */
+export const createMenuItem = async (itemData) => {
+  try {
+    const docRef = await addDoc(collection(db, 'menu_items'), {
+      ...itemData,
+      isAvailable: true,
+      rating: 0,
+      reviews: 0,
+      createdAt: serverTimestamp(),
+    });
+    return { id: docRef.id, ...itemData };
+  } catch (error) {
+    console.error('Erro ao criar prato:', error);
+    throw error;
+  }
+};
+
+/**
+ * Atualiza um prato
+ */
+export const updateMenuItem = async (itemId, itemData) => {
+  try {
+    const docRef = doc(db, 'menu_items', itemId);
+    await updateDoc(docRef, {
+      ...itemData,
+      updatedAt: serverTimestamp(),
+    });
+    return { id: itemId, ...itemData };
+  } catch (error) {
+    console.error('Erro ao atualizar prato:', error);
+    throw error;
+  }
+};
+
+/**
+ * Deleta um prato
+ */
+export const deleteMenuItem = async (itemId) => {
+  try {
+    await deleteDoc(doc(db, 'menu_items', itemId));
+  } catch (error) {
+    console.error('Erro ao deletar prato:', error);
+    throw error;
+  }
 };

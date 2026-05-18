@@ -1,66 +1,151 @@
-import { collection, query, where, getDocs, doc, getDoc, updateDoc, addDoc } from 'firebase/firestore';
+import {
+  collection,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  doc,
+  getDocs,
+  getDoc,
+  query,
+  where,
+  serverTimestamp,
+} from 'firebase/firestore';
 import { db } from './firebase';
 
-export const couponService = {
-  // Validate coupon
-  async validateCoupon(code) {
-    try {
-      const q = query(
-        collection(db, 'coupons'),
-        where('code', '==', code.toUpperCase()),
-        where('active', '==', true)
-      );
-      const querySnapshot = await getDocs(q);
+/**
+ * Cria um novo cupom de desconto
+ */
+export const createCoupon = async (couponData) => {
+  try {
+    const docRef = await addDoc(collection(db, 'coupons'), {
+      ...couponData,
+      usedTimes: 0,
+      active: true,
+      createdAt: serverTimestamp(),
+    });
+    return { id: docRef.id, ...couponData };
+  } catch (error) {
+    console.error('Erro ao criar cupom:', error);
+    throw error;
+  }
+};
 
-      if (querySnapshot.empty) {
-        throw new Error('Cupom não encontrado');
-      }
-
-      const coupon = querySnapshot.docs[0].data();
-
-      // Check if coupon is expired
-      if (coupon.expiresAt && new Date(coupon.expiresAt) < new Date()) {
-        throw new Error('Cupom expirado');
-      }
-
-      // Check if coupon has reached max uses
-      if (coupon.maxUses && coupon.usedTimes >= coupon.maxUses) {
-        throw new Error('Cupom já foi utilizado o número máximo de vezes');
-      }
-
-      return { id: querySnapshot.docs[0].id, ...coupon };
-    } catch (error) {
-      throw new Error(error.message);
+/**
+ * Obtém um cupom pelo código
+ */
+export const getCouponByCode = async (code) => {
+  try {
+    const couponsRef = collection(db, 'coupons');
+    const q = query(
+      couponsRef,
+      where('code', '==', code.toUpperCase()),
+      where('active', '==', true)
+    );
+    const snapshot = await getDocs(q);
+    
+    if (snapshot.empty) {
+      return null;
     }
-  },
+    
+    const coupon = snapshot.docs[0];
+    return { id: coupon.id, ...coupon.data() };
+  } catch (error) {
+    console.error('Erro ao buscar cupom:', error);
+    throw error;
+  }
+};
 
-  // Use coupon
-  async useCoupon(couponId) {
-    try {
-      const couponRef = doc(db, 'coupons', couponId);
-      const couponSnap = await getDoc(couponRef);
-      const currentUses = couponSnap.data().usedTimes || 0;
-
-      await updateDoc(couponRef, {
-        usedTimes: currentUses + 1,
-      });
-    } catch (error) {
-      throw new Error(error.message);
+/**
+ * Valida um cupom
+ */
+export const validateCoupon = async (code) => {
+  try {
+    const coupon = await getCouponByCode(code);
+    
+    if (!coupon) {
+      return { valid: false, message: 'Cupom não encontrado' };
     }
-  },
-
-  // Add coupon (admin)
-  async addCoupon(couponData) {
-    try {
-      const docRef = await addDoc(collection(db, 'coupons'), {
-        ...couponData,
-        code: couponData.code.toUpperCase(),
-        usedTimes: 0,
-        createdAt: new Date().toISOString(),
-      });
-      return docRef.id;
-    } catch (error) {
-      throw new Error(error.message);
+    
+    if (!coupon.active) {
+      return { valid: false, message: 'Cupom inativo' };
     }
-  },
+    
+    if (coupon.expiresAt && new Date() > new Date(coupon.expiresAt.toDate?.() || coupon.expiresAt)) {
+      return { valid: false, message: 'Cupom expirado' };
+    }
+    
+    if (coupon.maxUses && coupon.usedTimes >= coupon.maxUses) {
+      return { valid: false, message: 'Cupom já atingiu o limite de usos' };
+    }
+    
+    return { valid: true, coupon };
+  } catch (error) {
+    console.error('Erro ao validar cupom:', error);
+    throw error;
+  }
+};
+
+/**
+ * Usa um cupom (incrementa contador)
+ */
+export const useCoupon = async (couponId) => {
+  try {
+    const docRef = doc(db, 'coupons', couponId);
+    const coupon = await getDoc(docRef);
+    const currentUses = coupon.data().usedTimes || 0;
+    
+    await updateDoc(docRef, {
+      usedTimes: currentUses + 1,
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    console.error('Erro ao usar cupom:', error);
+    throw error;
+  }
+};
+
+/**
+ * Obtém todos os cupons (admin)
+ */
+export const getAllCoupons = async () => {
+  try {
+    const couponsRef = collection(db, 'coupons');
+    const snapshot = await getDocs(couponsRef);
+    return snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
+  } catch (error) {
+    console.error('Erro ao buscar cupons:', error);
+    throw error;
+  }
+};
+
+/**
+ * Atualiza um cupom
+ */
+export const updateCoupon = async (couponId, couponData) => {
+  try {
+    const docRef = doc(db, 'coupons', couponId);
+    await updateDoc(docRef, {
+      ...couponData,
+      updatedAt: serverTimestamp(),
+    });
+    return { id: couponId, ...couponData };
+  } catch (error) {
+    console.error('Erro ao atualizar cupom:', error);
+    throw error;
+  }
+};
+
+/**
+ * Deleta um cupom
+ */
+export const deleteCoupon = async (couponId) => {
+  try {
+    await deleteDoc(doc(db, 'coupons', couponId));
+  } catch (error) {
+    console.error('Erro ao deletar cupom:', error);
+    throw error;
+  }
 };

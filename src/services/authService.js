@@ -3,86 +3,80 @@ import {
   signInWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
-  setPersistence,
-  browserLocalPersistence,
+  updateProfile,
 } from 'firebase/auth';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { auth, db } from './firebase';
+import { doc, setDoc, getDoc } from 'firebase/firestore';
 
-// Enable persistence
-setPersistence(auth, browserLocalPersistence).catch((error) => {
-  console.error('Error setting persistence:', error);
-});
+/**
+ * Registra um novo usuário (admin)
+ */
+export const registerAdmin = async (email, password, displayName) => {
+  try {
+    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    const user = userCredential.user;
 
-export const authService = {
-  // Register new user
-  async register(email, password, userData = {}) {
-    try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
+    await updateProfile(user, { displayName });
 
-      // Save user data to Firestore
-      await setDoc(doc(db, 'users', user.uid), {
-        uid: user.uid,
-        email: user.email,
-        role: userData.role || 'customer',
-        createdAt: new Date().toISOString(),
-        ...userData,
-      });
+    // Salva informações do admin no Firestore
+    await setDoc(doc(db, 'users', user.uid), {
+      uid: user.uid,
+      email: email,
+      displayName: displayName,
+      role: 'admin',
+      createdAt: new Date(),
+    });
 
-      return user;
-    } catch (error) {
-      throw new Error(error.message);
+    return user;
+  } catch (error) {
+    console.error('Erro ao registrar admin:', error);
+    throw error;
+  }
+};
+
+/**
+ * Faz login de um usuário (admin)
+ */
+export const loginAdmin = async (email, password) => {
+  try {
+    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+    return userCredential.user;
+  } catch (error) {
+    console.error('Erro ao fazer login:', error);
+    throw error;
+  }
+};
+
+/**
+ * Faz logout do usuário atual
+ */
+export const logoutAdmin = async () => {
+  try {
+    await signOut(auth);
+  } catch (error) {
+    console.error('Erro ao fazer logout:', error);
+    throw error;
+  }
+};
+
+/**
+ * Monitora o estado de autenticação do usuário
+ */
+export const onAuthChange = (callback) => {
+  return onAuthStateChanged(auth, async (user) => {
+    if (user) {
+      // Busca dados do usuário no Firestore
+      const userDoc = await getDoc(doc(db, 'users', user.uid));
+      callback({ ...user, ...userDoc.data() });
+    } else {
+      callback(null);
     }
-  },
+  });
+};
 
-  // Login user
-  async login(email, password) {
-    try {
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      return userCredential.user;
-    } catch (error) {
-      throw new Error(error.message);
-    }
-  },
-
-  // Logout user
-  async logout() {
-    try {
-      await signOut(auth);
-    } catch (error) {
-      throw new Error(error.message);
-    }
-  },
-
-  // Get current user
-  getCurrentUser() {
-    return auth.currentUser;
-  },
-
-  // Subscribe to auth changes
-  onAuthStateChange(callback) {
-    return onAuthStateChanged(auth, callback);
-  },
-
-  // Get user data from Firestore
-  async getUserData(uid) {
-    try {
-      const docRef = doc(db, 'users', uid);
-      const docSnap = await getDoc(docRef);
-      return docSnap.exists() ? docSnap.data() : null;
-    } catch (error) {
-      throw new Error(error.message);
-    }
-  },
-
-  // Check if user is admin
-  async isAdmin(uid) {
-    try {
-      const userData = await this.getUserData(uid);
-      return userData?.role === 'admin';
-    } catch (error) {
-      return false;
-    }
-  },
+/**
+ * Obtém o usuário atual
+ */
+export const getCurrentUser = () => {
+  return auth.currentUser;
 };

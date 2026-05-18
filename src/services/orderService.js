@@ -1,89 +1,140 @@
 import {
   collection,
-  query,
-  where,
-  getDocs,
-  getDoc,
-  doc,
   addDoc,
   updateDoc,
+  doc,
+  getDocs,
+  getDoc,
+  query,
+  where,
   orderBy,
-  onSnapshot,
+  serverTimestamp,
+  limit,
 } from 'firebase/firestore';
 import { db } from './firebase';
 
-export const orderService = {
-  // Create new order
-  async createOrder(orderData) {
-    try {
-      const docRef = await addDoc(collection(db, 'orders'), {
-        ...orderData,
-        status: 'pending',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      });
-      return { id: docRef.id, ...orderData };
-    } catch (error) {
-      throw new Error(error.message);
-    }
-  },
-
-  // Get all orders (admin)
-  async getAllOrders() {
-    try {
-      const q = query(collection(db, 'orders'), orderBy('createdAt', 'desc'));
-      const querySnapshot = await getDocs(q);
-      return querySnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-    } catch (error) {
-      throw new Error(error.message);
-    }
-  },
-
-  // Get orders by phone number (customer)
-  async getOrdersByPhone(phone) {
-    try {
-      const q = query(
-        collection(db, 'orders'),
-        where('customerPhone', '==', phone),
-        orderBy('createdAt', 'desc')
-      );
-      const querySnapshot = await getDocs(q);
-      return querySnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-    } catch (error) {
-      throw new Error(error.message);
-    }
-  },
-
-  // Get single order
-  async getOrder(orderId) {
-    try {
-      const docRef = doc(db, 'orders', orderId);
-      const docSnap = await getDoc(docRef);
-      return docSnap.exists() ? { id: docSnap.id, ...docSnap.data() } : null;
-    } catch (error) {
-      throw new Error(error.message);
-    }
-  },
-
-  // Update order status (admin)
-  async updateOrderStatus(orderId, status) {
-    try {
-      const orderRef = doc(db, 'orders', orderId);
-      await updateDoc(orderRef, {
-        status,
-        updatedAt: new Date().toISOString(),
-      });
-    } catch (error) {
-      throw new Error(error.message);
-    }
-  },
-
-  // Subscribe to orders (real-time)
-  subscribeToOrders(callback) {
-    const q = query(collection(db, 'orders'), orderBy('createdAt', 'desc'));
-    return onSnapshot(q, (querySnapshot) => {
-      const orders = querySnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-      callback(orders);
+/**
+ * Cria um novo pedido
+ */
+export const createOrder = async (orderData) => {
+  try {
+    const docRef = await addDoc(collection(db, 'orders'), {
+      ...orderData,
+      status: 'pending',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
     });
-  },
+    return { id: docRef.id, ...orderData };
+  } catch (error) {
+    console.error('Erro ao criar pedido:', error);
+    throw error;
+  }
+};
+
+/**
+ * Obtém um pedido específico
+ */
+export const getOrder = async (orderId) => {
+  try {
+    const docRef = doc(db, 'orders', orderId);
+    const snapshot = await getDoc(docRef);
+    return { id: snapshot.id, ...snapshot.data() };
+  } catch (error) {
+    console.error('Erro ao buscar pedido:', error);
+    throw error;
+  }
+};
+
+/**
+ * Obtém todos os pedidos (admin)
+ */
+export const getAllOrders = async () => {
+  try {
+    const ordersRef = collection(db, 'orders');
+    const q = query(ordersRef, orderBy('createdAt', 'desc'));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
+  } catch (error) {
+    console.error('Erro ao buscar pedidos:', error);
+    throw error;
+  }
+};
+
+/**
+ * Obtém pedidos de um cliente específico
+ */
+export const getOrdersByCustomer = async (customerPhone) => {
+  try {
+    const ordersRef = collection(db, 'orders');
+    const q = query(
+      ordersRef,
+      where('customerPhone', '==', customerPhone),
+      orderBy('createdAt', 'desc')
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
+  } catch (error) {
+    console.error('Erro ao buscar pedidos do cliente:', error);
+    throw error;
+  }
+};
+
+/**
+ * Atualiza o status de um pedido
+ */
+export const updateOrderStatus = async (orderId, newStatus) => {
+  try {
+    const docRef = doc(db, 'orders', orderId);
+    await updateDoc(docRef, {
+      status: newStatus,
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    console.error('Erro ao atualizar status do pedido:', error);
+    throw error;
+  }
+};
+
+/**
+ * Atualiza um pedido completo
+ */
+export const updateOrder = async (orderId, orderData) => {
+  try {
+    const docRef = doc(db, 'orders', orderId);
+    await updateDoc(docRef, {
+      ...orderData,
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    console.error('Erro ao atualizar pedido:', error);
+    throw error;
+  }
+};
+
+/**
+ * Obtém últimos N pedidos
+ */
+export const getRecentOrders = async (count = 10) => {
+  try {
+    const ordersRef = collection(db, 'orders');
+    const q = query(
+      ordersRef,
+      orderBy('createdAt', 'desc'),
+      limit(count)
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
+  } catch (error) {
+    console.error('Erro ao buscar pedidos recentes:', error);
+    throw error;
+  }
 };
